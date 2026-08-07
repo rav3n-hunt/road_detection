@@ -8,6 +8,14 @@ from PIL import Image
 import streamlit as st
 from ultralytics import YOLO
 
+# Coba import streamlit-webrtc untuk dukungan kamera browser di Cloud (HP & Laptop)
+try:
+    from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
+    import av
+    HAS_WEBRTC = True
+except ImportError:
+    HAS_WEBRTC = False
+
 # Konfigurasi Halaman Streamlit
 st.set_page_config(
     page_title="Sistem Deteksi Kerusakan Jalan YOLOv8",
@@ -21,10 +29,6 @@ MODEL_CUSTOM_PATH_1 = os.path.join("weights", "best.pt")
 MODEL_CUSTOM_PATH_2 = os.path.join("weight", "best.pt")
 MODEL_DEFAULT_PATH = "yolov8n.pt"
 
-CLASS_COLORS = {
-    0: (255, 0, 0),     # Pothole: Merah (RGB)
-    1: (255, 215, 0),   # Crack: Gold (RGB)
-}
 CLASS_NAMES = {0: "Pothole", 1: "Crack"}
 
 @st.cache_resource
@@ -107,8 +111,6 @@ def main():
             st_frame = st.empty()
             
             st.info("Memulai pemutaran dan inferensi video real-time...")
-            
-            pothole_total, crack_total = 0, 0
 
             while cap.isOpened():
                 ret, frame = cap.read()
@@ -126,42 +128,62 @@ def main():
             st.success("Pemrosesan video selesai!")
 
     # ---------------------------------------------------------
-    # MODE 3: LIVE STREAM KAMERA
+    # MODE 3: LIVE STREAM KAMERA (WEBRTC BROWSER HP/LAPTOP & LOCAL FALLBACK)
     # ---------------------------------------------------------
     elif app_mode == "📹 Live Stream Kamera":
-        st.subheader("📹 Live Streaming Kamera Real-Time (Webcam / Dashcam)")
-        st.write("Pastikan webcam terhubung. Klik centang di bawah untuk mengaktifkan pemindaian.")
+        st.subheader("📹 Live Streaming Kamera Real-Time (HP & Laptop Browser)")
 
-        run_cam = st.checkbox("Aktifkan Umpan Kamera (Live Camera Feed)")
-        st_cam_frame = st.empty()
+        if HAS_WEBRTC:
+            st.write("Akses kamera browser diaktifkan (WebRTC). Klik **START** untuk memulai pemindaian kamera HP atau Laptop Anda.")
 
-        if run_cam:
-            cap = cv2.VideoCapture(0)
-            if not cap.isOpened():
-                st.error("Gagal membuka kamera webcam. Pastikan akses kamera diizinkan.")
-            else:
-                prev_t = time.time()
-                while run_cam:
-                    ret, frame = cap.read()
-                    if not ret:
-                        st.warning("Umpan kamera terputus.")
-                        break
+            class YOLOVideoProcessor(VideoProcessorBase):
+                def __init__(self):
+                    self.conf = conf_threshold
 
-                    curr_t = time.time()
-                    fps = 1.0 / (curr_t - prev_t) if (curr_t - prev_t) > 0 else 30.0
-                    prev_t = curr_t
+                def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
+                    img = frame.to_ndarray(format="bgr24")
+                    results = model.predict(img, conf=conf_threshold, verbose=False)[0]
+                    annotated = results.plot()
+                    return av.VideoFrame.from_ndarray(annotated, format="bgr24")
 
-                    results = model.predict(frame, conf=conf_threshold, verbose=False)[0]
-                    annotated_frame = results.plot()
-                    
-                    # Tambahkan text FPS
-                    cv2.putText(annotated_frame, f"FPS: {fps:.1f}", (20, 40),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            webrtc_streamer(
+                key="yolo-road-detection",
+                video_processor_factory=YOLOVideoProcessor,
+                rtc_configuration=RTCConfiguration({
+                    "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+                }),
+                media_stream_constraints={"video": True, "audio": False}
+            )
+        else:
+            st.write("Mode Kamera Lokal OpenCV:")
+            run_cam = st.checkbox("Aktifkan Umpan Kamera (Live Camera Feed)")
+            st_cam_frame = st.empty()
 
-                    annotated_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-                    st_cam_frame.image(annotated_rgb, channels="RGB", use_container_width=True)
+            if run_cam:
+                cap = cv2.VideoCapture(0)
+                if not cap.isOpened():
+                    st.error("Gagal membuka kamera. Pastikan akses kamera diizinkan atau jalankan di lokal.")
+                else:
+                    prev_t = time.time()
+                    while run_cam:
+                        ret, frame = cap.read()
+                        if not ret:
+                            break
 
-                cap.release()
+                        curr_t = time.time()
+                        fps = 1.0 / (curr_t - prev_t) if (curr_t - prev_t) > 0 else 30.0
+                        prev_t = curr_t
+
+                        results = model.predict(frame, conf=conf_threshold, verbose=False)[0]
+                        annotated_frame = results.plot()
+                        
+                        cv2.putText(annotated_frame, f"FPS: {fps:.1f}", (20, 40),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+                        annotated_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+                        st_cam_frame.image(annotated_rgb, channels="RGB", use_container_width=True)
+
+                    cap.release()
 
     # ---------------------------------------------------------
     # MODE 4: LAPORAN ANALITIK
