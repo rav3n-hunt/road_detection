@@ -1,0 +1,77 @@
+{
+    "images": {
+        "download (1).jpg": {
+            "pothole": 0,
+            "crack": 0,
+            "total": 0,
+            "output_file": "output\\deteksi_download (1).jpg"
+        },
+        "download (2).jpg": {
+            "pothole": 0,
+            "crack": 1,
+            "total": 1,
+            "output_file": "output\\deteksi_download (2).jpg"
+        },
+        "download.jpg": {
+            "pothole": 0,
+            "crack": 0,
+            "total": 0,
+            "output_file": "output\\deteksi_download.jpg"
+        },
+        "images (1).jpg": {
+            "pothole": 1,
+            "crack": 0,
+            "total": 1,
+            "output_file": "output\\deteksi_images (1).jpg"
+        },
+        "images (2).jpg": {
+            "pothole": 1,
+            "crack": 0,
+            "total": 1,
+            "output_file": "output\\deteksi_images (2).jpg"
+        },
+        "images (3).jpg": {
+            "pothole": 3,
+            "crack": 0,
+            "total": 3,
+            "output_file": "output\\deteksi_images (3).jpg"
+        },
+        "images (4).jpg": {
+            "pothole": 2,
+            "crack": 1,
+            "total": 3,
+            "output_file": "output\\deteksi_images (4).jpg"
+        },
+        "images (5).jpg": {
+            "pothole": 0,
+            "crack": 1,
+            "total": 1,
+            "output_file": "output\\deteksi_images (5).jpg"
+        },
+        "images (6).jpg": {
+            "pothole": 1,
+            "crack": 0,
+            "total": 1,
+            "output_file": "output\\deteksi_images (6).jpg"
+        },
+        "images (7).jpg": {
+            "pothole": 1,
+            "crack": 0,
+            "total": 1,
+            "output_file": "output\\deteksi_images (7).jpg"
+        },
+        "images (8).jpg": {
+            "pothole": 0,
+            "crack": 0,
+            "total": 0,
+            "output_file": "output\\deteksi_images (8).jpg"
+        },
+        "images.jpg": {
+            "pothole": 4,
+            "crack": 0,
+            "total": 4,
+            "output_file": "output\\deteksi_images.jpg"
+        }
+    },
+    "videos": {}
+}

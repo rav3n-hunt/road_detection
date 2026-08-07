@@ -1,0 +1,10 @@
+# YOLOv8 Dataset Configuration for Road Damage Detection
+
+path: d:/road_detection/dataset # dataset root dir
+train: train/images             # train images (relative to path)
+val: val/images                 # val images (relative to path)
+test: test/images               # test images (optional, relative to path)
+
+# Classes
+nc: 2
+names: ['pothole', 'crack']
