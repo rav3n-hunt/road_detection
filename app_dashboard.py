@@ -51,7 +51,7 @@ def main():
     st.sidebar.header("⚙️ Pengaturan & Kontrol")
     st.sidebar.success(f"Model Aktif: `{os.path.basename(model_path)}`")
     
-    conf_threshold = st.sidebar.slider("Ambang Keyakinan (Confidence Threshold)", 0.1, 1.0, 0.40, 0.05)
+    conf_threshold = st.sidebar.slider("Ambang Keyakinan (Confidence Threshold)", 0.1, 1.0, 0.35, 0.05)
     
     app_mode = st.sidebar.radio(
         "Pilih Mode Operasi:",
@@ -120,7 +120,6 @@ def main():
                 results = model.predict(frame, conf=conf_threshold, verbose=False)[0]
                 annotated_frame = results.plot()
 
-                # Convert BGR to RGB
                 annotated_frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
                 st_frame.image(annotated_frame_rgb, caption="Video Real-Time Detection Feed", use_container_width=True)
 
@@ -128,31 +127,53 @@ def main():
             st.success("Pemrosesan video selesai!")
 
     # ---------------------------------------------------------
-    # MODE 3: LIVE STREAM KAMERA (WEBRTC BROWSER HP/LAPTOP & LOCAL FALLBACK)
+    # MODE 3: LIVE STREAM KAMERA (OPTIMIZED HP & LAPTOP BROWSER)
     # ---------------------------------------------------------
     elif app_mode == "📹 Live Stream Kamera":
-        st.subheader("📹 Live Streaming Kamera Real-Time (HP & Laptop Browser)")
+        st.subheader("📹 Live Streaming Kamera Real-Time (HP & Laptop)")
 
         if HAS_WEBRTC:
-            st.write("Akses kamera browser diaktifkan (WebRTC). Klik **START** untuk memulai pemindaian kamera HP atau Laptop Anda.")
+            st.markdown("""
+            **Petunjuk Kamera HP / Laptop:**
+            1. Izinkan akses kamera pada browser Chrome/Safari kamu.
+            2. Di HP, kamu bisa memilih **Kamera Belakang (Environment)** untuk mengarah ke jalan.
+            3. Klik tombol **START** di bawah untuk memulai pemindaian.
+            """)
+
+            cam_facing = st.radio("Pilih Kamera HP:", ["Kamera Belakang (Jalanan)", "Kamera Depan"], horizontal=True)
+            facing_mode = "environment" if "Belakang" in cam_facing else "user"
 
             class YOLOVideoProcessor(VideoProcessorBase):
                 def __init__(self):
                     self.conf = conf_threshold
+                    self.frame_count = 0
+                    self.latest_annotated = None
 
                 def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
-                    img = frame.to_ndarray(format="bgr24")
-                    results = model.predict(img, conf=conf_threshold, verbose=False)[0]
-                    annotated = results.plot()
-                    return av.VideoFrame.from_ndarray(annotated, format="bgr24")
+                    img_bgr = frame.to_ndarray(format="bgr24")
+
+                    # Optimasi FPS & Latensi HP: jalankan inferensi YOLOv8 secara efisien
+                    self.frame_count += 1
+                    if self.frame_count % 2 == 0 or self.latest_annotated is None:
+                        results = model.predict(img_bgr, conf=conf_threshold, verbose=False)[0]
+                        self.latest_annotated = results.plot()
+
+                    return av.VideoFrame.from_ndarray(self.latest_annotated, format="bgr24")
 
             webrtc_streamer(
-                key="yolo-road-detection",
+                key="yolo-road-detection-mobile",
                 video_processor_factory=YOLOVideoProcessor,
                 rtc_configuration=RTCConfiguration({
-                    "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+                    "iceServers": [
+                        {"urls": ["stun:stun.l.google.com:19302"]},
+                        {"urls": ["stun:stun1.l.google.com:19302"]},
+                        {"urls": ["stun:stun2.l.google.com:19302"]}
+                    ]
                 }),
-                media_stream_constraints={"video": True, "audio": False}
+                media_stream_constraints={
+                    "video": {"facingMode": facing_mode},
+                    "audio": False
+                }
             )
         else:
             st.write("Mode Kamera Lokal OpenCV:")
@@ -162,7 +183,7 @@ def main():
             if run_cam:
                 cap = cv2.VideoCapture(0)
                 if not cap.isOpened():
-                    st.error("Gagal membuka kamera. Pastikan akses kamera diizinkan atau jalankan di lokal.")
+                    st.error("Gagal membuka kamera. Pastikan akses kamera diizinkan.")
                 else:
                     prev_t = time.time()
                     while run_cam:
