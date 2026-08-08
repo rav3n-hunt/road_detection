@@ -8,14 +8,6 @@ from PIL import Image
 import streamlit as st
 from ultralytics import YOLO
 
-# Coba import streamlit-webrtc untuk dukungan kamera browser di Cloud (HP & Laptop)
-try:
-    from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
-    import av
-    HAS_WEBRTC = True
-except ImportError:
-    HAS_WEBRTC = False
-
 # Konfigurasi Halaman Streamlit
 st.set_page_config(
     page_title="Sistem Deteksi Kerusakan Jalan YOLOv8",
@@ -42,7 +34,7 @@ def load_model():
     return YOLO(path), path
 
 def main():
-    st.title("🛣️ Sistem Real-Time Deteksi & Klasifikasi Kerusakan Jalan")
+    st.title("🛣️ Sistem Deteksi & Klasifikasi Kerusakan Jalan")
     st.caption("Implementasi Computer Vision Berbasis Algoritma YOLOv8 (Pothole & Crack Detection)")
 
     model, model_path = load_model()
@@ -51,15 +43,15 @@ def main():
     st.sidebar.header("⚙️ Pengaturan & Kontrol")
     st.sidebar.success(f"Model Aktif: `{os.path.basename(model_path)}`")
     
-    conf_threshold = st.sidebar.slider("Ambang Keyakinan (Confidence Threshold)", 0.1, 1.0, 0.35, 0.05)
+    conf_threshold = st.sidebar.slider("Ambang Keyakinan (Confidence Threshold)", 0.10, 1.00, 0.35, 0.05)
     
     app_mode = st.sidebar.radio(
         "Pilih Mode Operasi:",
-        ["📸 Deteksi Gambar (Image)", "🎥 Deteksi Video", "📹 Live Stream Kamera", "📊 Laporan Analitik"]
+        ["📸 Deteksi Gambar (Image)", "🎥 Deteksi Video"]
     )
 
     st.sidebar.markdown("---")
-    st.sidebar.info("💡 **Petunjuk Skripsi:** Gunakan mode **Live Stream Kamera** atau **Deteksi Video** saat demonstrasi pengujian real-time di hadapan dosen penguji.")
+    st.sidebar.info("💡 **Petunjuk:** Unggah berkas citra gambar atau rekaman video jalanan untuk melihat pengujian deteksi otomatis.")
 
     # ---------------------------------------------------------
     # MODE 1: DETEKSI GAMBAR
@@ -125,98 +117,6 @@ def main():
 
             cap.release()
             st.success("Pemrosesan video selesai!")
-
-    # ---------------------------------------------------------
-    # MODE 3: LIVE STREAM KAMERA (OPTIMIZED HP & LAPTOP BROWSER)
-    # ---------------------------------------------------------
-    elif app_mode == "📹 Live Stream Kamera":
-        st.subheader("📹 Live Streaming Kamera Real-Time (HP & Laptop)")
-
-        if HAS_WEBRTC:
-            st.markdown("""
-            **Petunjuk Kamera HP / Laptop:**
-            1. Izinkan akses kamera pada browser Chrome/Safari kamu.
-            2. Di HP, kamu bisa memilih **Kamera Belakang (Environment)** untuk mengarah ke jalan.
-            3. Klik tombol **START** di bawah untuk memulai pemindaian.
-            """)
-
-            cam_facing = st.radio("Pilih Kamera HP:", ["Kamera Belakang (Jalanan)", "Kamera Depan"], horizontal=True)
-            facing_mode = "environment" if "Belakang" in cam_facing else "user"
-
-            class YOLOVideoProcessor(VideoProcessorBase):
-                def __init__(self):
-                    self.conf = conf_threshold
-                    self.frame_count = 0
-                    self.latest_annotated = None
-
-                def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
-                    img_bgr = frame.to_ndarray(format="bgr24")
-
-                    # Optimasi FPS & Latensi HP: jalankan inferensi YOLOv8 secara efisien
-                    self.frame_count += 1
-                    if self.frame_count % 2 == 0 or self.latest_annotated is None:
-                        results = model.predict(img_bgr, conf=conf_threshold, verbose=False)[0]
-                        self.latest_annotated = results.plot()
-
-                    return av.VideoFrame.from_ndarray(self.latest_annotated, format="bgr24")
-
-            webrtc_streamer(
-                key="yolo-road-detection-mobile",
-                video_processor_factory=YOLOVideoProcessor,
-                rtc_configuration=RTCConfiguration({
-                    "iceServers": [
-                        {"urls": ["stun:stun.l.google.com:19302"]},
-                        {"urls": ["stun:stun1.l.google.com:19302"]},
-                        {"urls": ["stun:stun2.l.google.com:19302"]}
-                    ]
-                }),
-                media_stream_constraints={
-                    "video": {"facingMode": facing_mode},
-                    "audio": False
-                }
-            )
-        else:
-            st.write("Mode Kamera Lokal OpenCV:")
-            run_cam = st.checkbox("Aktifkan Umpan Kamera (Live Camera Feed)")
-            st_cam_frame = st.empty()
-
-            if run_cam:
-                cap = cv2.VideoCapture(0)
-                if not cap.isOpened():
-                    st.error("Gagal membuka kamera. Pastikan akses kamera diizinkan.")
-                else:
-                    prev_t = time.time()
-                    while run_cam:
-                        ret, frame = cap.read()
-                        if not ret:
-                            break
-
-                        curr_t = time.time()
-                        fps = 1.0 / (curr_t - prev_t) if (curr_t - prev_t) > 0 else 30.0
-                        prev_t = curr_t
-
-                        results = model.predict(frame, conf=conf_threshold, verbose=False)[0]
-                        annotated_frame = results.plot()
-                        
-                        cv2.putText(annotated_frame, f"FPS: {fps:.1f}", (20, 40),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-
-                        annotated_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-                        st_cam_frame.image(annotated_rgb, channels="RGB", use_container_width=True)
-
-                    cap.release()
-
-    # ---------------------------------------------------------
-    # MODE 4: LAPORAN ANALITIK
-    # ---------------------------------------------------------
-    elif app_mode == "📊 Laporan Analitik":
-        st.subheader("📊 Laporan Ringkasan Hasil Deteksi Skripsi")
-        
-        report_json = os.path.join("output", "rekapitulasi_deteksi.json")
-        if os.path.exists(report_json):
-            st.json(report_json)
-        else:
-            st.warning("Laporan JSON belum ada. Jalankan pengujian di main.py untuk memperbarui laporan.")
 
 if __name__ == "__main__":
     main()
